@@ -25,10 +25,10 @@ final class RingPanelController {
     static let shared = RingPanelController()
 
     private let panel: RingPanel
-    private let model = RingViewModel()
+    private let model = WheelViewModel()
     private var timer: Timer?
-    /// Sticky rings (hotkey / menu) stay open until click, digit, Esc, or
-    /// hotkey again. Non-sticky rings (modifier hold) act on release.
+    /// Sticky wheels (hotkey / menu) stay open until click, digit, Esc, or
+    /// hotkey again. Non-sticky wheels (modifier hold) act on release.
     private(set) var isSticky = false
     private var holdModifiers: NSEvent.ModifierFlags = []
 
@@ -46,14 +46,11 @@ final class RingPanelController {
         panel.isFloatingPanel = true
         panel.animationBehavior = .none
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.contentView = NSHostingView(rootView: RingView(model: model) { [weak self] in
+        panel.contentView = NSHostingView(rootView: WheelView(model: model) { [weak self] in
             self?.handleClick()
         })
         panel.onKey = { [weak self] event in self?.handleKey(event) ?? false }
-        panel.onCancel = { [weak self] in
-            guard let self else { return }
-            if !self.model.pop() { self.hide() }
-        }
+        panel.onCancel = { [weak self] in self?.hide() }
     }
 
     func toggle(sticky: Bool) {
@@ -71,11 +68,13 @@ final class RingPanelController {
         let frame = screen.frame
         panel.setFrame(frame, display: false)
 
-        // y-down view coordinates, clamped so the whole ring stays on screen.
-        let margin = config.appearance.ringRadius + config.appearance.iconSize + 30
+        // y-down view coordinates, clamped so the whole wheel stays on screen.
+        let probe = WheelLayout(center: .zero, appearanceRadius: config.appearance.ringRadius,
+                                iconSize: config.appearance.iconSize)
+        let margin = probe.outerOuterRadius + 20
         let x = min(max(mouse.x - frame.minX, margin), frame.width - margin)
         let y = min(max(frame.maxY - mouse.y, margin), frame.height - margin)
-        model.reset(items: config.legacyItems, appearance: config.appearance,
+        model.reset(categories: config.categories, appearance: config.appearance,
                     center: CGPoint(x: x, y: y))
 
         panel.makeKeyAndOrderFront(nil)
@@ -87,45 +86,48 @@ final class RingPanelController {
         panel.orderOut(nil)
     }
 
-    /// Modifier-release path: run what's hovered, drill into a hovered
-    /// submenu (ring then turns sticky), or just close.
+    /// Modifier-release path: run the hovered child; with just a category
+    /// open, go sticky so the user can click or press a digit.
     func activateHoveredOrHide() {
         guard isVisible else { return }
-        guard let item = model.hoveredItem else { return hide() }
-        activate(item)
-    }
-
-    private func activate(_ item: RingItem) {
-        if case .submenu(let children) = item.action {
-            model.push(children)
+        if let child = model.hoveredChild {
+            hide()
+            ActionRunner.run(child)
+        } else if model.openCategoryIndex != nil {
             isSticky = true
-            return
+        } else {
+            hide()
         }
-        hide()
-        ActionRunner.run(item)
     }
 
     private func handleClick() {
-        if let item = model.hoveredItem {
-            activate(item)
-        } else if !model.pop() {
+        if let child = model.hoveredChild {
+            hide()
+            ActionRunner.run(child)
+        } else if model.openCategoryIndex != nil {
+            isSticky = true // clicked a category wedge (hover already opened it)
+        } else {
             hide()
         }
     }
 
     private func handleKey(_ event: NSEvent) -> Bool {
         if event.keyCode == 53 { // Esc
-            if !model.pop() { hide() }
+            hide()
             return true
         }
-        if let char = event.charactersIgnoringModifiers?.first,
-           let digit = char.wholeNumberValue, (1...9).contains(digit),
-           model.currentItems.indices.contains(digit - 1) {
-            model.hover(index: digit - 1)
-            activate(model.currentItems[digit - 1])
-            return true
+        guard let char = event.charactersIgnoringModifiers?.first,
+              let digit = char.wholeNumberValue, (1...9).contains(digit) else { return false }
+        if let open = model.openCategory {
+            guard open.items.indices.contains(digit - 1) else { return true }
+            let item = open.items[digit - 1]
+            hide()
+            ActionRunner.run(item)
+        } else {
+            model.openCategory(at: digit - 1)
+            isSticky = true
         }
-        return false
+        return true
     }
 
     private func startTracking() {
@@ -151,7 +153,7 @@ final class RingPanelController {
 
         // Failsafe release detection for the hold trigger: NSEvent's class
         // property reads hardware state and needs no permissions, so a missed
-        // flagsChanged event can't strand the ring on screen.
+        // flagsChanged event can't strand the wheel on screen.
         if !isSticky, !holdModifiers.isEmpty {
             let current = NSEvent.modifierFlags.intersection([.command, .option, .control, .shift])
             if current != holdModifiers { activateHoveredOrHide() }

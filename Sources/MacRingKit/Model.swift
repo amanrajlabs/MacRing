@@ -241,13 +241,6 @@ public struct RingConfig: Codable, Equatable {
         return categories
     }
 
-    /// TEMPORARY shim so the v1 ring UI keeps working until Task 4 replaces it.
-    /// Task 4 deletes this property.
-    public var legacyItems: [RingItem] {
-        categories.map { RingItem(id: $0.id, title: $0.name, symbol: $0.symbol,
-                                  action: .submenu($0.items)) }
-    }
-
     public static func defaultConfig() -> RingConfig {
         RingConfig(categories: [
             RingCategory(name: "AI Tools", symbol: "sparkles", items: [

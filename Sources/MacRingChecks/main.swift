@@ -63,27 +63,6 @@ do {
 
 check(RingAction.builtin("timer").kindName == "builtin", "builtin action kind name")
 
-// MARK: Geometry
-
-let c = CGPoint.zero
-check(approx(RingGeometry.position(index: 0, count: 4, radius: 100, center: c),
-             CGPoint(x: 0, y: -100)), "index 0 sits at the top")
-check(approx(RingGeometry.position(index: 1, count: 4, radius: 100, center: c),
-             CGPoint(x: 100, y: 0)), "index 1 is clockwise-right")
-check(RingGeometry.hitIndex(center: c, point: CGPoint(x: 70, y: 0), count: 4, deadZone: 30) == 1,
-      "hit right selects index 1")
-check(RingGeometry.hitIndex(center: c, point: CGPoint(x: 0, y: -70), count: 4, deadZone: 30) == 0,
-      "hit top selects index 0")
-check(RingGeometry.hitIndex(center: c, point: CGPoint(x: -70, y: 0), count: 4, deadZone: 30) == 3,
-      "hit left selects index 3")
-check(RingGeometry.hitIndex(center: c, point: CGPoint(x: 10, y: 0), count: 4, deadZone: 30) == nil,
-      "dead zone selects nothing")
-check(RingGeometry.hitIndex(center: c, point: CGPoint(x: 70, y: 0), count: 0, deadZone: 30) == nil,
-      "empty ring selects nothing")
-// Slightly counterclockwise of top must still snap to index 0, not wrap.
-check(RingGeometry.hitIndex(center: c, point: CGPoint(x: -10, y: -70), count: 8, deadZone: 30) == 0,
-      "just left of top snaps to index 0")
-
 // MARK: Modifiers
 
 check(Modifiers.nsFlags(["option", "shift"]) == [.option, .shift], "ns flag mapping")
