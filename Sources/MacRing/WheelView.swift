@@ -149,6 +149,12 @@ struct WheelView: View {
                     Text(category.name)
                         .font(.system(size: 10, weight: .medium, design: .rounded))
                         .lineLimit(1)
+                    if i < 9 {
+                        Text("\(i + 1)")
+                            .font(.system(size: 8, weight: .bold, design: .rounded))
+                            .foregroundStyle(hovered ? Color.black.opacity(0.55)
+                                                     : .white.opacity(0.55))
+                    }
                 }
                 .foregroundStyle(hovered ? Color.black : .white)
                 .frame(maxWidth: max(layout.innerOuterRadius * 0.55, 60))
