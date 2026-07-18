@@ -16,10 +16,11 @@ to one, release → it runs.
   permission.
 - **Menu bar item**: open the ring, settings, or the config file.
 - **Any action type**: launch apps (path, bundle id, or bare name), open URLs,
-  files/folders, run shell commands (`zsh`), run macOS Shortcuts, and nest
-  submenus (dwell on one to fan it open).
-- **Fully customizable**: Settings window (items, trigger, ring radius, icon
-  size, accent color, dim) plus a hand-editable JSON config at
+  files/folders, run shell commands (`zsh`), and run macOS Shortcuts —
+  organized into renameable categories.
+- **Fully customizable**: Settings window (categories with an installed-app
+  picker, trigger, wheel size, icon size, accent color, dim) plus a
+  hand-editable JSON config at
   `~/Library/Application Support/MacRing/config.json`.
 - Local-only. No account, no analytics, no network.
 
