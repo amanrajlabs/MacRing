@@ -100,5 +100,28 @@ check(ActionRunner.resolveAppURL("Notes") != nil, "resolve by bare name")
 check(ActionRunner.resolveAppURL("com.apple.finder") != nil, "resolve by bundle id")
 check(ActionRunner.resolveAppURL("/nope/missing.app") == nil, "missing path resolves nil")
 
+// MARK: Wheel geometry
+
+let layout = WheelLayout(center: .zero, appearanceRadius: 100, iconSize: 46)
+check(WheelGeometry.region(of: CGPoint(x: 20, y: 0), in: layout) == .hub, "hub region")
+check(WheelGeometry.region(of: CGPoint(x: 70, y: 0), in: layout) == .innerBand, "inner band region")
+check(WheelGeometry.region(of: CGPoint(x: 102, y: 0), in: layout) == .gap, "gap region")
+check(WheelGeometry.region(of: CGPoint(x: 140, y: 0), in: layout) == .outerBand, "outer band region")
+check(WheelGeometry.region(of: CGPoint(x: 500, y: 0), in: layout) == .outside, "outside region")
+
+check(WheelGeometry.categoryIndex(atAngle: -.pi / 2, count: 4) == 0, "top angle is category 0")
+check(WheelGeometry.categoryIndex(atAngle: 0, count: 4) == 1, "right angle is category 1")
+check(WheelGeometry.categoryIndex(atAngle: .pi, count: 4) == 3, "left angle is category 3")
+check(WheelGeometry.categoryIndex(atAngle: 0, count: 0) == nil, "no categories, no index")
+
+let arc = WheelGeometry.childArc(categoryIndex: 1, categoryCount: 4, childCount: 3, layout: layout)
+check(abs(arc.midAngle(1) - 0) < 0.001, "child arc centers on its category angle")
+let bigArc = WheelGeometry.childArc(categoryIndex: 0, categoryCount: 4, childCount: 40, layout: layout)
+check(bigArc.step * 40 <= 2 * .pi + 0.001, "40 children clamp to a full circle")
+check(WheelGeometry.childIndex(atAngle: arc.midAngle(2), arc: arc) == 2, "mid angle hits its wedge")
+check(WheelGeometry.childIndex(atAngle: arc.end + 0.3, arc: arc) == nil, "outside the arc hovers nothing")
+check(WheelGeometry.childIndex(atAngle: arc.midAngle(0), arc: WheelGeometry.Arc(start: 0, step: 0.5, count: 0)) == nil,
+      "empty arc hovers nothing")
+
 print(failures == 0 ? "\nAll checks passed." : "\n\(failures) check(s) FAILED.")
 exit(failures == 0 ? 0 : 1)
