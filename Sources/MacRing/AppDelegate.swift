@@ -1,0 +1,104 @@
+import AppKit
+import MacRingKit
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var statusItem: NSStatusItem!
+    private let holdMonitor = ModifierHoldMonitor()
+    private var settings: SettingsWindowController?
+    private var axMenuItem: NSMenuItem!
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem.button?.image = NSImage(systemSymbolName: "circle.grid.cross",
+                                           accessibilityDescription: "MacRing")
+        statusItem.menu = buildMenu()
+
+        holdMonitor.onTriggerDown = { RingPanelController.shared.show(sticky: false) }
+        holdMonitor.onTriggerUp = { RingPanelController.shared.activateHoveredOrHide() }
+        HotkeyCenter.shared.onHotkey = { RingPanelController.shared.toggle(sticky: true) }
+
+        applyConfig()
+        NotificationCenter.default.addObserver(forName: ConfigStore.changedNotification,
+                                               object: nil, queue: .main) { [weak self] _ in
+            DispatchQueue.main.async { self?.applyConfig() }
+        }
+
+        if ConfigStore.shared.config.trigger.holdEnabled, !ModifierHoldMonitor.isTrusted {
+            ModifierHoldMonitor.promptForTrust()
+        }
+    }
+
+    private func applyConfig() {
+        let cfg = ConfigStore.shared.config
+        holdMonitor.configure(names: cfg.trigger.holdModifiers, enabled: cfg.trigger.holdEnabled)
+        if cfg.trigger.hotkeyEnabled {
+            HotkeyCenter.shared.register(keyCode: cfg.trigger.hotkeyKeyCode,
+                                         modifierNames: cfg.trigger.hotkeyModifiers)
+        } else {
+            HotkeyCenter.shared.unregister()
+        }
+        refreshMenuTitles()
+    }
+
+    private func buildMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Open Ring", action: #selector(openRing), keyEquivalent: "")
+            .target = self
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+            .target = self
+        menu.addItem(withTitle: "Open Config File", action: #selector(openConfig), keyEquivalent: "")
+            .target = self
+        menu.addItem(withTitle: "Reload Config", action: #selector(reloadConfig), keyEquivalent: "")
+            .target = self
+        menu.addItem(.separator())
+        axMenuItem = menu.addItem(withTitle: "", action: #selector(grantAccessibility),
+                                  keyEquivalent: "")
+        axMenuItem.target = self
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit MacRing", action: #selector(NSApplication.terminate(_:)),
+                     keyEquivalent: "q")
+        return menu
+    }
+
+    private func refreshMenuTitles() {
+        let trusted = ModifierHoldMonitor.isTrusted
+        let combo = Modifiers.symbolString(ConfigStore.shared.config.trigger.holdModifiers)
+        axMenuItem.title = trusted
+            ? "Hold \(combo) to open the ring"
+            : "Grant Accessibility (enables hold-\(combo) trigger)…"
+        axMenuItem.isEnabled = !trusted
+    }
+
+    @objc private func openRing() { RingPanelController.shared.show(sticky: true) }
+
+    @objc private func openSettings() {
+        if settings == nil { settings = SettingsWindowController() }
+        NSApp.activate(ignoringOtherApps: true)
+        settings?.showWindow(nil)
+        settings?.window?.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func openConfig() {
+        NSWorkspace.shared.open(ConfigStore.shared.configURL)
+    }
+
+    @objc private func reloadConfig() {
+        ConfigStore.shared.reload()
+        if let error = ConfigStore.shared.lastError {
+            let alert = NSAlert()
+            alert.messageText = "Config file has errors"
+            alert.informativeText = "Kept the previous configuration.\n\n\(error)"
+            alert.runModal()
+        }
+    }
+
+    @objc private func grantAccessibility() {
+        ModifierHoldMonitor.promptForTrust()
+        if let url = URL(string:
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+}
