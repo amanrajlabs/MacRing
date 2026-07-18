@@ -1,15 +1,19 @@
 # MacRing
 
 A native macOS radial quick-launcher, inspired by [Orbs](https://orbs.studio).
-Hold **⌥⇧** anywhere → a ring of your apps and tools appears under the cursor.
-Slide toward an item, release → it runs.
+Hold **⌥⇧** anywhere → a segmented wheel of your categories appears under the
+cursor. Hover a category — its apps and tools fan out on an outer ring. Slide
+to one, release → it runs.
 
 ## Features
 
-- **Hold-to-open ring**: hold the configured modifiers (default ⌥⇧), flick,
-  release. Esc or click-outside cancels. Works over full-screen apps.
-- **Hotkey toggle**: ⌃⌥Space (default) opens a sticky ring — click or press
-  1–9 to activate — so the app works even without Accessibility permission.
+- **Two-ring category wheel**: inner ring = categories (AI Tools,
+  Photo & Video, Developer, System & Utilities by default); hovering fans the
+  category's contents onto an outer arc. Esc or click-outside cancels. Works
+  over full-screen apps.
+- **Hotkey toggle**: ⌃⌥Space (default) opens a sticky wheel — digits pick a
+  category then an item — so the app works even without Accessibility
+  permission.
 - **Menu bar item**: open the ring, settings, or the config file.
 - **Any action type**: launch apps (path, bundle id, or bare name), open URLs,
   files/folders, run shell commands (`zsh`), run macOS Shortcuts, and nest
@@ -35,16 +39,16 @@ hold-⌥⇧ trigger (the hotkey and menu bar work without it).
 
 ```json
 {
-  "items": [
-    { "title": "Safari", "type": "app", "value": "Safari" },
-    { "title": "Deploy", "type": "shell", "value": "cd ~/proj && ./deploy.sh" },
-    { "title": "Tools", "type": "submenu", "items": [
-      { "title": "Screenshot", "type": "shell", "value": "screencapture -ic" }
+  "categories": [
+    { "name": "AI Tools", "symbol": "sparkles", "items": [
+      { "title": "Claude", "type": "app", "value": "Claude" },
+      { "title": "Perplexity", "type": "url", "value": "https://www.perplexity.ai" }
     ]}
   ]
 }
 ```
 
-Item types: `app`, `url`, `file`, `shell`, `shortcut`, `submenu`. Optional
-`symbol` sets an SF Symbol icon. Missing sections fall back to defaults; a
-broken file never wipes your running config.
+Item types: `app`, `url`, `file`, `shell`, `shortcut`. Optional `symbol` sets
+an SF Symbol icon. v1 configs (flat `items` with submenus) migrate
+automatically. Missing sections fall back to defaults; a broken file never
+wipes your running config.
