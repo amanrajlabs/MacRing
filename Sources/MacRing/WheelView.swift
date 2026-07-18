@@ -74,12 +74,15 @@ struct WedgeShape: Shape {
 
 /// One wedge with its content placed at the band's mid radius. All segments
 /// share the parent ZStack's center, so frames just need to be square.
+/// `highlighted` = cursor is on this wedge (white). `tinted` = open category
+/// whose cursor is elsewhere (accent wash, dark text stays white).
 private struct WedgeSegment<Content: View>: View {
     let start: CGFloat
     let end: CGFloat
     let innerRadius: CGFloat
     let outerRadius: CGFloat
     let highlighted: Bool
+    var tinted: Bool = false
     let accent: Color
     @ViewBuilder let content: () -> Content
 
@@ -89,10 +92,13 @@ private struct WedgeSegment<Content: View>: View {
         ZStack {
             WedgeShape(startAngle: start, endAngle: end,
                        innerRadius: innerRadius, outerRadius: outerRadius)
-                .fill(highlighted ? Color.white.opacity(0.92) : .black.opacity(0.62))
+                .fill(highlighted ? Color.white.opacity(0.92)
+                      : tinted ? accent.opacity(0.26)
+                      : Color.black.opacity(0.62))
             WedgeShape(startAngle: start, endAngle: end,
                        innerRadius: innerRadius, outerRadius: outerRadius)
-                .stroke(highlighted ? accent : .white.opacity(0.14), lineWidth: 1)
+                .stroke(highlighted || tinted ? accent : .white.opacity(0.14),
+                        lineWidth: tinted && !highlighted ? 1.5 : 1)
             content()
                 .offset(x: midRadius * cos(mid), y: midRadius * sin(mid))
         }
@@ -130,11 +136,13 @@ struct WheelView: View {
         let halfStep = .pi / CGFloat(count)
         return ForEach(Array(model.categories.enumerated()), id: \.element.id) { i, category in
             let mid = WheelGeometry.categoryMidAngle(i, count: model.categories.count)
+            let hovered = i == model.hoveredCategoryIndex
             let open = i == model.openCategoryIndex
             WedgeSegment(start: mid - halfStep, end: mid + halfStep,
                          innerRadius: layout.holeRadius,
                          outerRadius: layout.innerOuterRadius,
-                         highlighted: open, accent: accent) {
+                         highlighted: hovered, tinted: open && !hovered,
+                         accent: accent) {
                 VStack(spacing: 3) {
                     Image(systemName: category.symbol)
                         .font(.system(size: 17, weight: .semibold))
@@ -142,7 +150,7 @@ struct WheelView: View {
                         .font(.system(size: 10, weight: .medium, design: .rounded))
                         .lineLimit(1)
                 }
-                .foregroundStyle(open ? Color.black : .white)
+                .foregroundStyle(hovered ? Color.black : .white)
                 .frame(maxWidth: max(layout.innerOuterRadius * 0.55, 60))
             }
         }

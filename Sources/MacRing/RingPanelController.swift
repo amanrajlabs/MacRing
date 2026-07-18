@@ -104,8 +104,14 @@ final class RingPanelController {
         if let child = model.hoveredChild {
             hide()
             ActionRunner.run(child)
-        } else if model.openCategoryIndex != nil {
-            isSticky = true // clicked a category wedge (hover already opened it)
+            return
+        }
+        // Clicking a category wedge pins the wheel open; empty space closes it.
+        let mouse = NSEvent.mouseLocation
+        let frame = panel.frame
+        let cursor = CGPoint(x: mouse.x - frame.minX, y: frame.maxY - mouse.y)
+        if WheelGeometry.region(of: cursor, in: model.layout) == .innerBand {
+            isSticky = true
         } else {
             hide()
         }

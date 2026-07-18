@@ -10,6 +10,9 @@ final class WheelViewModel: ObservableObject {
     @Published var categories: [RingCategory] = []
     @Published var openCategoryIndex: Int?
     @Published var hoveredChildIndex: Int?
+    /// Category wedge directly under the cursor (inner band only). The OPEN
+    /// category persists while the cursor is on the child arc; this does not.
+    @Published var hoveredCategoryIndex: Int?
     @Published var appearance = AppearanceConfig()
     @Published var center = CGPoint.zero
 
@@ -43,23 +46,26 @@ final class WheelViewModel: ObservableObject {
         self.center = center
         openCategoryIndex = nil
         hoveredChildIndex = nil
+        hoveredCategoryIndex = nil
     }
 
     func update(cursor: CGPoint) {
         switch WheelGeometry.region(of: cursor, in: layout) {
         case .innerBand:
             let theta = WheelGeometry.angle(of: cursor, around: center)
-            if let idx = WheelGeometry.categoryIndex(atAngle: theta, count: categories.count),
-               idx != openCategoryIndex {
-                openCategoryIndex = idx
+            if let idx = WheelGeometry.categoryIndex(atAngle: theta, count: categories.count) {
+                hoveredCategoryIndex = idx
+                if idx != openCategoryIndex { openCategoryIndex = idx }
             }
             hoveredChildIndex = nil
         case .outerBand, .outside:
             // Outside stays angular so a fast flick past the band still selects.
+            hoveredCategoryIndex = nil
             guard let arc = childArc else { return }
             hoveredChildIndex = WheelGeometry.childIndex(
                 atAngle: WheelGeometry.angle(of: cursor, around: center), arc: arc)
         case .hub, .gap:
+            hoveredCategoryIndex = nil
             hoveredChildIndex = nil
         }
     }
@@ -68,5 +74,6 @@ final class WheelViewModel: ObservableObject {
         guard categories.indices.contains(index) else { return }
         openCategoryIndex = index
         hoveredChildIndex = nil
+        hoveredCategoryIndex = nil
     }
 }
