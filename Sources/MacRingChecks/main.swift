@@ -123,5 +123,14 @@ check(WheelGeometry.childIndex(atAngle: arc.end + 0.3, arc: arc) == nil, "outsid
 check(WheelGeometry.childIndex(atAngle: arc.midAngle(0), arc: WheelGeometry.Arc(start: 0, step: 0.5, count: 0)) == nil,
       "empty arc hovers nothing")
 
+// MARK: App scanner
+
+let apps = AppScanner.scan()
+check(!apps.isEmpty, "scanner finds applications")
+check(apps.contains { $0.name == "Notes" }, "scanner finds system apps")
+check(Set(apps.map(\.path)).count == apps.count, "scanner paths are unique")
+check(apps == apps.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending },
+      "scanner output is name-sorted")
+
 print(failures == 0 ? "\nAll checks passed." : "\n\(failures) check(s) FAILED.")
 exit(failures == 0 ? 0 : 1)
