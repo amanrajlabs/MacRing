@@ -1,5 +1,6 @@
 import AppKit
 import MacRingKit
+import ServiceManagement
 import SwiftUI
 
 @MainActor
@@ -80,11 +81,12 @@ struct SettingsView: View {
     @State private var axTrusted = ModifierHoldMonitor.isTrusted
     @State private var saveWork: DispatchWorkItem?
     @State private var selectedCategoryID: UUID?
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
         TabView {
             ringTab.tabItem { Label("Ring", systemImage: "circle.grid.2x2") }
-            Form { triggerSection }.formStyle(.grouped)
+            Form { generalSection; triggerSection }.formStyle(.grouped)
                 .tabItem { Label("Trigger", systemImage: "keyboard") }
             Form { appearanceSection; footerSection }.formStyle(.grouped)
                 .tabItem { Label("Appearance", systemImage: "paintbrush") }
@@ -193,6 +195,38 @@ struct SettingsView: View {
                 guard let index = config.categories.firstIndex(where: { $0.id == id }) else { return }
                 config.categories[index] = newValue
             })
+    }
+
+    // MARK: General
+
+    private var generalSection: some View {
+        Section("General") {
+            Toggle("Launch MacRing at login", isOn: $launchAtLogin)
+                .onChange(of: launchAtLogin) { applyLaunchAtLogin() }
+            if SMAppService.mainApp.status == .requiresApproval {
+                HStack {
+                    Text("Approve MacRing under Login Items to finish.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Button("Open Login Items…") {
+                        SMAppService.openSystemSettingsLoginItems()
+                    }
+                }
+            }
+        }
+    }
+
+    private func applyLaunchAtLogin() {
+        do {
+            if launchAtLogin {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            NSLog("MacRing: launch-at-login change failed: \(error)")
+            launchAtLogin = SMAppService.mainApp.status == .enabled
+        }
     }
 
     // MARK: Trigger (unchanged from v1)
