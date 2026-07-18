@@ -75,7 +75,7 @@ final class RingPanelController {
         let margin = config.appearance.ringRadius + config.appearance.iconSize + 30
         let x = min(max(mouse.x - frame.minX, margin), frame.width - margin)
         let y = min(max(frame.maxY - mouse.y, margin), frame.height - margin)
-        model.reset(items: config.items, appearance: config.appearance,
+        model.reset(items: config.legacyItems, appearance: config.appearance,
                     center: CGPoint(x: x, y: y))
 
         panel.makeKeyAndOrderFront(nil)

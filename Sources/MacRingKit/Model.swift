@@ -1,6 +1,6 @@
 import Foundation
 
-/// One entry on the ring. `symbol` overrides the default icon with an SF Symbol.
+/// One entry on the wheel. `symbol` overrides the default icon with an SF Symbol.
 public struct RingItem: Identifiable, Equatable {
     public var id: UUID
     public var title: String
@@ -25,7 +25,10 @@ public enum RingAction: Equatable {
     case shell(String)
     /// macOS Shortcuts workflow name, run via `shortcuts run`.
     case shortcut(String)
+    /// v1 legacy nesting; decodable for migration, never rendered in v2.
     case submenu([RingItem])
+    /// Extension point for future built-in mini-tools, routed to BuiltinRegistry.
+    case builtin(String)
 
     public var kindName: String {
         switch self {
@@ -35,13 +38,13 @@ public enum RingAction: Equatable {
         case .shell: "shell"
         case .shortcut: "shortcut"
         case .submenu: "submenu"
+        case .builtin: "builtin"
         }
     }
 }
 
 // The config file is meant to be hand-editable, so items encode flat:
 // {"title": "Safari", "type": "app", "value": "/Applications/Safari.app"}
-// {"title": "Tools", "type": "submenu", "items": [...]}
 extension RingItem: Codable {
     private enum CodingKeys: String, CodingKey {
         case id, title, symbol, type, value, items
@@ -59,6 +62,7 @@ extension RingItem: Codable {
         case "file": action = .file(try c.decode(String.self, forKey: .value))
         case "shell": action = .shell(try c.decode(String.self, forKey: .value))
         case "shortcut": action = .shortcut(try c.decode(String.self, forKey: .value))
+        case "builtin": action = .builtin(try c.decode(String.self, forKey: .value))
         case "submenu": action = .submenu(try c.decode([RingItem].self, forKey: .items))
         default:
             throw DecodingError.dataCorruptedError(
@@ -73,7 +77,8 @@ extension RingItem: Codable {
         try c.encodeIfPresent(symbol, forKey: .symbol)
         try c.encode(action.kindName, forKey: .type)
         switch action {
-        case .app(let v), .url(let v), .file(let v), .shell(let v), .shortcut(let v):
+        case .app(let v), .url(let v), .file(let v), .shell(let v),
+             .shortcut(let v), .builtin(let v):
             try c.encode(v, forKey: .value)
         case .submenu(let children):
             try c.encode(children, forKey: .items)
@@ -81,11 +86,47 @@ extension RingItem: Codable {
     }
 }
 
+/// A wedge on the inner ring; its items fan out on the outer ring.
+public struct RingCategory: Identifiable, Equatable {
+    public var id: UUID
+    public var name: String
+    public var symbol: String
+    public var items: [RingItem]
+
+    public init(id: UUID = UUID(), name: String, symbol: String = "square.grid.2x2",
+                items: [RingItem] = []) {
+        self.id = id
+        self.name = name
+        self.symbol = symbol
+        self.items = items
+    }
+}
+
+extension RingCategory: Codable {
+    private enum CodingKeys: String, CodingKey { case id, name, symbol, items }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(UUID.self, forKey: .id)) ?? UUID()
+        name = try c.decode(String.self, forKey: .name)
+        symbol = try c.decodeIfPresent(String.self, forKey: .symbol) ?? "square.grid.2x2"
+        items = try c.decodeIfPresent([RingItem].self, forKey: .items) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(symbol, forKey: .symbol)
+        try c.encode(items, forKey: .items)
+    }
+}
+
 public struct AppearanceConfig: Codable, Equatable {
     public var ringRadius: Double
     public var iconSize: Double
     public var accentHex: String
-    /// Opacity of the full-screen dim behind the ring, 0...1.
+    /// Opacity of the full-screen dim behind the wheel, 0...1.
     public var dimOpacity: Double
 
     public init(ringRadius: Double = 130, iconSize: Double = 46,
@@ -140,38 +181,97 @@ public struct RingConfig: Codable, Equatable {
     public var version: Int
     public var trigger: TriggerConfig
     public var appearance: AppearanceConfig
-    public var items: [RingItem]
+    public var categories: [RingCategory]
 
-    public init(version: Int = 1, trigger: TriggerConfig = TriggerConfig(),
-                appearance: AppearanceConfig = AppearanceConfig(), items: [RingItem]) {
+    private enum CodingKeys: String, CodingKey {
+        case version, trigger, appearance, categories, items
+    }
+
+    public init(version: Int = 2, trigger: TriggerConfig = TriggerConfig(),
+                appearance: AppearanceConfig = AppearanceConfig(),
+                categories: [RingCategory]) {
         self.version = version
         self.trigger = trigger
         self.appearance = appearance
-        self.items = items
+        self.categories = categories
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
         trigger = try c.decodeIfPresent(TriggerConfig.self, forKey: .trigger) ?? TriggerConfig()
         appearance = try c.decodeIfPresent(AppearanceConfig.self, forKey: .appearance) ?? AppearanceConfig()
-        items = try c.decodeIfPresent([RingItem].self, forKey: .items) ?? []
+        if let cats = try c.decodeIfPresent([RingCategory].self, forKey: .categories) {
+            categories = cats
+        } else if let legacy = try c.decodeIfPresent([RingItem].self, forKey: .items) {
+            categories = Self.migrate(legacyItems: legacy)
+        } else {
+            categories = []
+        }
+        version = 2
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(version, forKey: .version)
+        try c.encode(trigger, forKey: .trigger)
+        try c.encode(appearance, forKey: .appearance)
+        try c.encode(categories, forKey: .categories)
+    }
+
+    /// v1 → v2: root submenus become categories (nested submenus dropped);
+    /// root leaves collect into a leading "General" category.
+    static func migrate(legacyItems: [RingItem]) -> [RingCategory] {
+        var categories: [RingCategory] = []
+        var general: [RingItem] = []
+        for item in legacyItems {
+            if case .submenu(let children) = item.action {
+                let leaves = children.filter {
+                    if case .submenu = $0.action { false } else { true }
+                }
+                categories.append(RingCategory(id: item.id, name: item.title,
+                                               symbol: item.symbol ?? "square.grid.2x2",
+                                               items: leaves))
+            } else {
+                general.append(item)
+            }
+        }
+        if !general.isEmpty {
+            categories.insert(RingCategory(name: "General", symbol: "star", items: general), at: 0)
+        }
+        return categories
+    }
+
+    /// TEMPORARY shim so the v1 ring UI keeps working until Task 4 replaces it.
+    /// Task 4 deletes this property.
+    public var legacyItems: [RingItem] {
+        categories.map { RingItem(id: $0.id, title: $0.name, symbol: $0.symbol,
+                                  action: .submenu($0.items)) }
     }
 
     public static func defaultConfig() -> RingConfig {
-        RingConfig(items: [
-            RingItem(title: "Safari", action: .app("/Applications/Safari.app")),
-            RingItem(title: "Notes", action: .app("/System/Applications/Notes.app")),
-            RingItem(title: "Terminal", action: .app("/System/Applications/Utilities/Terminal.app")),
-            RingItem(title: "Home", symbol: "folder", action: .file("~")),
-            RingItem(title: "Screenshot", symbol: "camera.viewfinder", action: .shell("screencapture -ic")),
-            RingItem(title: "GitHub", action: .url("https://github.com")),
-            RingItem(title: "System", symbol: "gearshape.2", action: .submenu([
+        RingConfig(categories: [
+            RingCategory(name: "AI Tools", symbol: "sparkles", items: [
+                RingItem(title: "ChatGPT", action: .app("ChatGPT")),
+                RingItem(title: "Claude", action: .app("Claude")),
+                RingItem(title: "Perplexity", action: .url("https://www.perplexity.ai")),
+            ]),
+            RingCategory(name: "Photo & Video", symbol: "photo.on.rectangle", items: [
+                RingItem(title: "Photos", action: .app("/System/Applications/Photos.app")),
+                RingItem(title: "Preview", action: .app("/System/Applications/Preview.app")),
+                RingItem(title: "QuickTime", action: .app("/System/Applications/QuickTime Player.app")),
+                RingItem(title: "Screenshot", symbol: "camera.viewfinder", action: .shell("screencapture -ic")),
+            ]),
+            RingCategory(name: "Developer", symbol: "chevron.left.forwardslash.chevron.right", items: [
+                RingItem(title: "Terminal", action: .app("/System/Applications/Utilities/Terminal.app")),
+                RingItem(title: "VS Code", action: .app("Visual Studio Code")),
+                RingItem(title: "GitHub", action: .url("https://github.com")),
+            ]),
+            RingCategory(name: "System & Utilities", symbol: "gearshape.2", items: [
                 RingItem(title: "Settings", action: .app("/System/Applications/System Settings.app")),
                 RingItem(title: "Activity Monitor", action: .app("/System/Applications/Utilities/Activity Monitor.app")),
                 RingItem(title: "Disk Utility", action: .app("/System/Applications/Utilities/Disk Utility.app")),
                 RingItem(title: "Sleep Display", symbol: "display", action: .shell("pmset displaysleepnow")),
-            ])),
+            ]),
         ])
     }
 }

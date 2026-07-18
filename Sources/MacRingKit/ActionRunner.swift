@@ -24,7 +24,9 @@ public enum ActionRunner {
         case .shortcut(let name):
             launch("/usr/bin/shortcuts", ["run", name])
         case .submenu:
-            break // handled by the ring UI, never executed directly
+            break // legacy v1 nesting; handled by UI, never executed directly
+        case .builtin(let id):
+            BuiltinRegistry.shared.run(id)
         }
     }
 

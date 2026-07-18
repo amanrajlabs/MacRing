@@ -19,45 +19,49 @@ func approx(_ a: CGPoint, _ b: CGPoint, tolerance: CGFloat = 0.001) -> Bool {
     abs(a.x - b.x) < tolerance && abs(a.y - b.y) < tolerance
 }
 
-// MARK: Model round-trip
+// MARK: Model round-trip (v2)
 
 do {
     let original = RingConfig.defaultConfig()
     let data = try JSONEncoder().encode(original)
     let decoded = try JSONDecoder().decode(RingConfig.self, from: data)
     check(decoded == original, "default config encodes and decodes losslessly")
+    check(original.version == 2 && original.categories.count == 4,
+          "default config is v2 with four categories")
 } catch {
     check(false, "default config round-trip threw: \(error)")
 }
 
-// Hand-written config: no ids, partial sections, nested submenu.
+// v1 file (root items + submenu) migrates to categories.
 do {
-    let json = """
-    {"items": [
+    let v1 = """
+    {"version": 1, "items": [
       {"title": "Safari", "type": "app", "value": "Safari"},
-      {"title": "Tools", "type": "submenu", "items": [
-        {"title": "Ping", "type": "shell", "value": "ping -c1 1.1.1.1"}
+      {"title": "Tools", "type": "submenu", "symbol": "wrench", "items": [
+        {"title": "Ping", "type": "shell", "value": "ping -c1 1.1.1.1"},
+        {"title": "Nested", "type": "submenu", "items": [
+          {"title": "Deep", "type": "url", "value": "https://x.com"}]}
       ]}
     ]}
     """
-    let cfg = try JSONDecoder().decode(RingConfig.self, from: Data(json.utf8))
-    check(cfg.items.count == 2, "hand-written config parses")
-    check(cfg.trigger == TriggerConfig(), "missing trigger section gets defaults")
-    if case .submenu(let children) = cfg.items[1].action {
-        check(children.count == 1 && children[0].action == .shell("ping -c1 1.1.1.1"),
-              "nested submenu parses")
-    } else {
-        check(false, "nested submenu parses")
-    }
+    let cfg = try JSONDecoder().decode(RingConfig.self, from: Data(v1.utf8))
+    check(cfg.version == 2, "v1 config migrates to version 2")
+    check(cfg.categories.count == 2, "migration yields General + Tools")
+    check(cfg.categories[0].name == "General" && cfg.categories[0].items.count == 1,
+          "root leaves land in a leading General category")
+    check(cfg.categories[1].symbol == "wrench" && cfg.categories[1].items.count == 1,
+          "submenu becomes category; nested submenus are dropped")
 } catch {
-    check(false, "hand-written config parse threw: \(error)")
+    check(false, "v1 migration threw: \(error)")
 }
 
 do {
-    let bad = Data(#"{"items": [{"title": "X", "type": "warp", "value": "y"}]}"#.utf8)
+    let bad = Data(#"{"categories": [{"name": "X", "items": [{"title": "Y", "type": "warp", "value": "z"}]}]}"#.utf8)
     check((try? JSONDecoder().decode(RingConfig.self, from: bad)) == nil,
           "unknown item type is rejected")
 }
+
+check(RingAction.builtin("timer").kindName == "builtin", "builtin action kind name")
 
 // MARK: Geometry
 

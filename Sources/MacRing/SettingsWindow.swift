@@ -21,7 +21,8 @@ private extension RingItem {
     var valueString: String {
         get {
             switch action {
-            case .app(let v), .url(let v), .file(let v), .shell(let v), .shortcut(let v): v
+            case .app(let v), .url(let v), .file(let v), .shell(let v),
+                 .shortcut(let v), .builtin(let v): v
             case .submenu: ""
             }
         }
@@ -32,6 +33,7 @@ private extension RingItem {
             case .file: action = .file(newValue)
             case .shell: action = .shell(newValue)
             case .shortcut: action = .shortcut(newValue)
+            case .builtin: action = .builtin(newValue)
             case .submenu: break
             }
         }
@@ -182,8 +184,13 @@ struct SettingsView: View {
     // MARK: Items
 
     private var itemsSection: some View {
-        Section("Ring Items") {
-            ItemsEditor(items: $config.items, allowSubmenu: true)
+        Section("Categories") {
+            ForEach(config.categories) { category in
+                LabeledContent(category.name, value: "\(category.items.count) items")
+            }
+            Text("Category editing arrives with the wheel editor (Task 5). Until then, edit the config file directly.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -246,112 +253,3 @@ struct SettingsView: View {
     }
 }
 
-private struct ItemsEditor: View {
-    @Binding var items: [RingItem]
-    let allowSubmenu: Bool
-
-    private var kinds: [String] {
-        allowSubmenu
-            ? ["app", "url", "file", "shell", "shortcut", "submenu"]
-            : ["app", "url", "file", "shell", "shortcut"]
-    }
-
-    var body: some View {
-        ForEach($items, id: \.id) { $item in
-            ItemRow(item: $item, kinds: kinds, allowSubmenu: allowSubmenu,
-                    onDelete: { remove(item.id) },
-                    onUp: { move(item.id, by: -1) },
-                    onDown: { move(item.id, by: 1) })
-        }
-        HStack {
-            Button("Add Item") {
-                items.append(RingItem(title: "New Item", action: .app("")))
-            }
-            if allowSubmenu {
-                Button("Add Submenu") {
-                    items.append(RingItem(title: "New Submenu", action: .submenu([])))
-                }
-            }
-            Spacer()
-            Text("\(items.count) item\(items.count == 1 ? "" : "s")")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func remove(_ id: UUID) {
-        items.removeAll { $0.id == id }
-    }
-
-    private func move(_ id: UUID, by offset: Int) {
-        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
-        let target = index + offset
-        guard items.indices.contains(target) else { return }
-        items.swapAt(index, target)
-    }
-}
-
-private struct ItemRow: View {
-    @Binding var item: RingItem
-    let kinds: [String]
-    let allowSubmenu: Bool
-    let onDelete: () -> Void
-    let onUp: () -> Void
-    let onDown: () -> Void
-
-    private var valuePlaceholder: String {
-        switch item.kind {
-        case "app": "Path, bundle id, or app name"
-        case "url": "https://…"
-        case "file": "Path (~ allowed)"
-        case "shell": "Shell command (zsh)"
-        case "shortcut": "Shortcut name"
-        default: ""
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                TextField("Title", text: $item.title)
-                    .frame(width: 140)
-                Picker("", selection: $item.kind) {
-                    ForEach(kinds, id: \.self) { Text($0) }
-                }
-                .labelsHidden()
-                .frame(width: 100)
-                if item.kind == "submenu" {
-                    Text("\(item.children.count) children")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                } else {
-                    TextField(valuePlaceholder, text: $item.valueString)
-                }
-                controls
-            }
-            HStack {
-                TextField("SF Symbol override (optional)", text: $item.symbolText)
-                    .font(.caption)
-                    .frame(width: 220)
-                Spacer()
-            }
-            if item.kind == "submenu", allowSubmenu {
-                DisclosureGroup("Submenu items") {
-                    ItemsEditor(items: $item.children, allowSubmenu: false)
-                }
-                .font(.caption)
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    private var controls: some View {
-        HStack(spacing: 4) {
-            Button(action: onUp) { Image(systemName: "chevron.up") }
-            Button(action: onDown) { Image(systemName: "chevron.down") }
-            Button(action: onDelete) { Image(systemName: "trash") }
-        }
-        .buttonStyle(.borderless)
-    }
-}

@@ -45,6 +45,7 @@ enum IconProvider {
         case .shell: return "terminal"
         case .shortcut: return "wand.and.stars"
         case .submenu: return "square.grid.3x3"
+        case .builtin: return "puzzlepiece.extension"
         }
     }
 }
