@@ -190,7 +190,7 @@ struct WheelView: View {
     @ViewBuilder
     private func childIcon(_ item: RingItem, hovered: Bool) -> some View {
         let side = model.appearance.iconSize * 0.62
-        if let nsImage = IconProvider.nsImage(for: item) {
+        if let nsImage = model.icon(for: item) {
             Image(nsImage: nsImage)
                 .resizable()
                 .scaledToFit()

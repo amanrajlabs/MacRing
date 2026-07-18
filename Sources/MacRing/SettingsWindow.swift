@@ -173,15 +173,26 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var categoryDetail: some View {
-        if let index = selectedIndex {
-            CategoryEditor(category: $config.categories[index])
-                .id(config.categories[index].id)
+        if let id = selectedCategoryID, config.categories.contains(where: { $0.id == id }) {
+            CategoryEditor(category: categoryBinding(id: id))
+                .id(id)
                 .padding(.leading, 12)
         } else {
             Text("Select or add a category")
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    /// Writes resolve the category by id at set-time, so a delete or reorder
+    /// between render and commit can never write through a stale index.
+    private func categoryBinding(id: UUID) -> Binding<RingCategory> {
+        Binding(
+            get: { config.categories.first { $0.id == id } ?? RingCategory(name: "") },
+            set: { newValue in
+                guard let index = config.categories.firstIndex(where: { $0.id == id }) else { return }
+                config.categories[index] = newValue
+            })
     }
 
     // MARK: Trigger (unchanged from v1)
@@ -463,6 +474,6 @@ private struct AppPickerSheet: View {
             .padding(10)
         }
         .frame(width: 480, height: 440)
-        .onAppear { apps = AppScanner.scan() }
+        .task { apps = await Task.detached(priority: .userInitiated) { AppScanner.scan() }.value }
     }
 }

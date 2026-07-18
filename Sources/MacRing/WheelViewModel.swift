@@ -16,6 +16,17 @@ final class WheelViewModel: ObservableObject {
     @Published var appearance = AppearanceConfig()
     @Published var center = CGPoint.zero
 
+    private var iconCache: [UUID: NSImage?] = [:]
+
+    /// Filesystem probes and NSWorkspace lookups are too slow for a 60 Hz
+    /// hover path; resolve each item's icon once per wheel session.
+    func icon(for item: RingItem) -> NSImage? {
+        if let cached = iconCache[item.id] { return cached }
+        let image = IconProvider.nsImage(for: item)
+        iconCache[item.id] = image
+        return image
+    }
+
     var layout: WheelLayout {
         WheelLayout(center: center, appearanceRadius: appearance.ringRadius,
                     iconSize: appearance.iconSize)
@@ -47,6 +58,7 @@ final class WheelViewModel: ObservableObject {
         openCategoryIndex = nil
         hoveredChildIndex = nil
         hoveredCategoryIndex = nil
+        iconCache.removeAll()
     }
 
     func update(cursor: CGPoint) {
