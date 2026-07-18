@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let holdMonitor = ModifierHoldMonitor()
     private var settings: SettingsWindowController?
     private var axMenuItem: NSMenuItem!
+    private var axPollTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -27,6 +28,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if ConfigStore.shared.config.trigger.holdEnabled, !ModifierHoldMonitor.isTrusted {
             ModifierHoldMonitor.promptForTrust()
         }
+
+        WelcomeWindowController.showIfFirstRun()
     }
 
     private func applyConfig() {
@@ -39,6 +42,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             HotkeyCenter.shared.unregister()
         }
         refreshMenuTitles()
+        startAXPollingIfNeeded()
+    }
+
+    /// While the hold trigger is enabled but untrusted, watch for the user
+    /// granting Accessibility so the monitor starts working without a relaunch.
+    private func startAXPollingIfNeeded() {
+        guard ConfigStore.shared.config.trigger.holdEnabled,
+              !ModifierHoldMonitor.isTrusted else {
+            axPollTimer?.invalidate()
+            axPollTimer = nil
+            return
+        }
+        guard axPollTimer == nil else { return }
+        axPollTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+            DispatchQueue.main.async { self?.checkAXTrust() }
+        }
+    }
+
+    private func checkAXTrust() {
+        guard ModifierHoldMonitor.isTrusted else { return }
+        axPollTimer?.invalidate()
+        axPollTimer = nil
+        applyConfig() // reinstalls the hold monitor now that events will flow
     }
 
     private func buildMenu() -> NSMenu {
