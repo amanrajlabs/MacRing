@@ -5,7 +5,7 @@ import SwiftUI
 @MainActor
 final class SettingsWindowController: NSWindowController {
     convenience init() {
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 720),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 640),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable],
                               backing: .buffered, defer: false)
         window.title = "MacRing Settings"
@@ -50,15 +50,9 @@ private extension RingItem {
             case "file": action = .file(value)
             case "shell": action = .shell(value)
             case "shortcut": action = .shortcut(value)
-            case "submenu": action = .submenu(children)
             default: break
             }
         }
-    }
-
-    var children: [RingItem] {
-        get { if case .submenu(let c) = action { c } else { [] } }
-        set { if case .submenu = action { action = .submenu(newValue) } }
     }
 
     var symbolText: String {
@@ -85,21 +79,25 @@ struct SettingsView: View {
     @State private var config = ConfigStore.shared.config
     @State private var axTrusted = ModifierHoldMonitor.isTrusted
     @State private var saveWork: DispatchWorkItem?
+    @State private var selectedCategoryID: UUID?
 
     var body: some View {
-        Form {
-            triggerSection
-            itemsSection
-            appearanceSection
-            footerSection
+        TabView {
+            ringTab.tabItem { Label("Ring", systemImage: "circle.grid.2x2") }
+            Form { triggerSection }.formStyle(.grouped)
+                .tabItem { Label("Trigger", systemImage: "keyboard") }
+            Form { appearanceSection; footerSection }.formStyle(.grouped)
+                .tabItem { Label("Appearance", systemImage: "paintbrush") }
         }
-        .formStyle(.grouped)
-        .frame(minWidth: 600, minHeight: 560)
+        .frame(minWidth: 700, minHeight: 560)
         .onChange(of: config) { scheduleSave() }
         .onReceive(NotificationCenter.default.publisher(for: ConfigStore.changedNotification)) { _ in
             if ConfigStore.shared.config != config { config = ConfigStore.shared.config }
         }
-        .onAppear { axTrusted = ModifierHoldMonitor.isTrusted }
+        .onAppear {
+            axTrusted = ModifierHoldMonitor.isTrusted
+            if selectedCategoryID == nil { selectedCategoryID = config.categories.first?.id }
+        }
     }
 
     private func scheduleSave() {
@@ -110,11 +108,87 @@ struct SettingsView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
     }
 
-    // MARK: Trigger
+    // MARK: Ring tab
+
+    private var ringTab: some View {
+        HSplitView {
+            categoryList
+                .frame(minWidth: 200, maxWidth: 260)
+            categoryDetail
+                .frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .padding(12)
+    }
+
+    private var categoryList: some View {
+        VStack(spacing: 8) {
+            List(selection: $selectedCategoryID) {
+                ForEach(config.categories) { category in
+                    Label {
+                        Text(category.name)
+                    } icon: {
+                        Image(systemName: category.symbol)
+                    }
+                    .badge(category.items.count)
+                    .tag(category.id)
+                }
+            }
+            if config.categories.count > 10 {
+                Text("More than 10 categories makes wedges cramped.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+            HStack(spacing: 6) {
+                Button {
+                    let new = RingCategory(name: "New Category")
+                    config.categories.append(new)
+                    selectedCategoryID = new.id
+                } label: { Image(systemName: "plus") }
+                Button {
+                    guard let index = selectedIndex else { return }
+                    config.categories.remove(at: index)
+                    selectedCategoryID = config.categories.first?.id
+                } label: { Image(systemName: "minus") }
+                .disabled(selectedIndex == nil)
+                Divider().frame(height: 14)
+                Button { moveSelected(-1) } label: { Image(systemName: "chevron.up") }
+                    .disabled(selectedIndex.map { $0 == 0 } ?? true)
+                Button { moveSelected(1) } label: { Image(systemName: "chevron.down") }
+                    .disabled(selectedIndex.map { $0 == config.categories.count - 1 } ?? true)
+                Spacer()
+            }
+            .buttonStyle(.borderless)
+        }
+    }
+
+    private var selectedIndex: Int? {
+        config.categories.firstIndex { $0.id == selectedCategoryID }
+    }
+
+    private func moveSelected(_ offset: Int) {
+        guard let index = selectedIndex,
+              config.categories.indices.contains(index + offset) else { return }
+        config.categories.swapAt(index, index + offset)
+    }
+
+    @ViewBuilder
+    private var categoryDetail: some View {
+        if let index = selectedIndex {
+            CategoryEditor(category: $config.categories[index])
+                .id(config.categories[index].id)
+                .padding(.leading, 12)
+        } else {
+            Text("Select or add a category")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    // MARK: Trigger (unchanged from v1)
 
     private var triggerSection: some View {
         Section("Trigger") {
-            Toggle("Hold modifiers to open the ring", isOn: $config.trigger.holdEnabled)
+            Toggle("Hold modifiers to open the wheel", isOn: $config.trigger.holdEnabled)
             if config.trigger.holdEnabled {
                 HStack(spacing: 16) {
                     modifierToggle("⌃ control", "control")
@@ -123,7 +197,7 @@ struct SettingsView: View {
                     modifierToggle("⌘ command", "command")
                 }
                 if config.trigger.holdModifiers.count < 2 {
-                    Text("Pick at least two modifiers or the ring will pop up constantly.")
+                    Text("Pick at least two modifiers or the wheel will pop up constantly.")
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
@@ -142,7 +216,7 @@ struct SettingsView: View {
                     }
                 }
             }
-            Toggle("Hotkey toggles the ring", isOn: $config.trigger.hotkeyEnabled)
+            Toggle("Hotkey toggles the wheel", isOn: $config.trigger.hotkeyEnabled)
             if config.trigger.hotkeyEnabled {
                 Picker("Hotkey", selection: hotkeyBinding) {
                     ForEach(HotkeyPreset.all) { Text($0.label).tag($0.label) }
@@ -181,24 +255,11 @@ struct SettingsView: View {
             })
     }
 
-    // MARK: Items
-
-    private var itemsSection: some View {
-        Section("Categories") {
-            ForEach(config.categories) { category in
-                LabeledContent(category.name, value: "\(category.items.count) items")
-            }
-            Text("Category editing arrives with the wheel editor (Task 5). Until then, edit the config file directly.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     // MARK: Appearance
 
     private var appearanceSection: some View {
         Section("Appearance") {
-            LabeledContent("Ring radius") {
+            LabeledContent("Wheel size") {
                 Slider(value: $config.appearance.ringRadius, in: 90...220) {
                     EmptyView()
                 } minimumValueLabel: { Text("S") } maximumValueLabel: { Text("L") }
@@ -253,3 +314,155 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - Category editor
+
+private struct CategoryEditor: View {
+    @Binding var category: RingCategory
+    @State private var showingAppPicker = false
+
+    private let kinds = ["app", "url", "file", "shell", "shortcut"]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                TextField("Category name", text: $category.name)
+                    .font(.headline)
+                    .frame(width: 200)
+                TextField("SF Symbol", text: $category.symbol)
+                    .frame(width: 150)
+                Image(systemName: category.symbol.isEmpty ? "questionmark" : category.symbol)
+            }
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach($category.items, id: \.id) { $item in
+                        ItemRow(item: $item, kinds: kinds,
+                                onDelete: { category.items.removeAll { $0.id == item.id } },
+                                onUp: { move(item.id, by: -1) },
+                                onDown: { move(item.id, by: 1) })
+                    }
+                }
+            }
+            HStack {
+                Button("Add App…") { showingAppPicker = true }
+                Menu("Add Custom") {
+                    Button("URL") { add(.url("https://")) }
+                    Button("File / Folder") { add(.file("~/")) }
+                    Button("Shell Command") { add(.shell("")) }
+                    Button("Shortcut") { add(.shortcut("")) }
+                }
+                .frame(width: 120)
+                Spacer()
+                Text("\(category.items.count) item\(category.items.count == 1 ? "" : "s")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .sheet(isPresented: $showingAppPicker) {
+            AppPickerSheet { app in
+                category.items.append(RingItem(title: app.name, action: .app(app.path)))
+            }
+        }
+    }
+
+    private func add(_ action: RingAction) {
+        category.items.append(RingItem(title: "New Item", action: action))
+    }
+
+    private func move(_ id: UUID, by offset: Int) {
+        guard let index = category.items.firstIndex(where: { $0.id == id }) else { return }
+        let target = index + offset
+        guard category.items.indices.contains(target) else { return }
+        category.items.swapAt(index, target)
+    }
+}
+
+private struct ItemRow: View {
+    @Binding var item: RingItem
+    let kinds: [String]
+    let onDelete: () -> Void
+    let onUp: () -> Void
+    let onDown: () -> Void
+
+    private var valuePlaceholder: String {
+        switch item.kind {
+        case "app": "Path, bundle id, or app name"
+        case "url": "https://…"
+        case "file": "Path (~ allowed)"
+        case "shell": "Shell command (zsh)"
+        case "shortcut": "Shortcut name"
+        default: ""
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            TextField("Title", text: $item.title)
+                .frame(width: 120)
+            Picker("", selection: $item.kind) {
+                ForEach(kinds, id: \.self) { Text($0) }
+            }
+            .labelsHidden()
+            .frame(width: 90)
+            TextField(valuePlaceholder, text: $item.valueString)
+            TextField("Symbol", text: $item.symbolText)
+                .frame(width: 90)
+            HStack(spacing: 4) {
+                Button(action: onUp) { Image(systemName: "chevron.up") }
+                Button(action: onDown) { Image(systemName: "chevron.down") }
+                Button(action: onDelete) { Image(systemName: "trash") }
+            }
+            .buttonStyle(.borderless)
+        }
+    }
+}
+
+// MARK: - App picker
+
+private struct AppPickerSheet: View {
+    let onPick: (InstalledApp) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    @State private var apps: [InstalledApp] = []
+
+    private var filtered: [InstalledApp] {
+        query.isEmpty ? apps
+            : apps.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TextField("Search apps…", text: $query)
+                .textFieldStyle(.roundedBorder)
+                .padding(10)
+            List(filtered) { app in
+                HStack {
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: app.path))
+                        .resizable()
+                        .frame(width: 22, height: 22)
+                    Text(app.name)
+                    Spacer()
+                    Text(app.path)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onPick(app)
+                    dismiss()
+                }
+            }
+            HStack {
+                Text("Click an app to add it")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Done") { dismiss() }
+            }
+            .padding(10)
+        }
+        .frame(width: 480, height: 440)
+        .onAppear { apps = AppScanner.scan() }
+    }
+}
