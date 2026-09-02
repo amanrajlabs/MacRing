@@ -1,4 +1,3 @@
 .build/
 .DS_Store
-dist/MacRing.app
-dist/AppIcon.icns
+dist/
