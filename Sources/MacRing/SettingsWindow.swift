@@ -82,6 +82,7 @@ struct SettingsView: View {
     @State private var saveWork: DispatchWorkItem?
     @State private var selectedCategoryID: UUID?
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var savingFromSelf = false
 
     var body: some View {
         TabView {
@@ -94,7 +95,9 @@ struct SettingsView: View {
         .frame(minWidth: 700, minHeight: 560)
         .onChange(of: config) { scheduleSave() }
         .onReceive(NotificationCenter.default.publisher(for: ConfigStore.changedNotification)) { _ in
-            if ConfigStore.shared.config != config { config = ConfigStore.shared.config }
+            if !savingFromSelf, ConfigStore.shared.config != config {
+                config = ConfigStore.shared.config
+            }
         }
         .onAppear {
             axTrusted = ModifierHoldMonitor.isTrusted
@@ -105,7 +108,11 @@ struct SettingsView: View {
     private func scheduleSave() {
         saveWork?.cancel()
         let snapshot = config
-        let work = DispatchWorkItem { ConfigStore.shared.save(snapshot) }
+        let work = DispatchWorkItem {
+            savingFromSelf = true
+            ConfigStore.shared.save(snapshot)
+            savingFromSelf = false
+        }
         saveWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
     }

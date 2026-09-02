@@ -18,13 +18,14 @@ public final class ConfigStore {
             .appendingPathComponent("MacRing", isDirectory: true)
         configURL = dir.appendingPathComponent("config.json")
         config = RingConfig.defaultConfig()
-        if let loaded = Self.read(from: configURL).0 {
+        let (loaded, error) = Self.read(from: configURL)
+        if let loaded {
             config = loaded
         } else if !FileManager.default.fileExists(atPath: configURL.path) {
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             Self.write(config, to: configURL)
         } else {
-            lastError = Self.read(from: configURL).1
+            lastError = error
         }
     }
 

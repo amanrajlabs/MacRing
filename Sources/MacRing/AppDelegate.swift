@@ -15,8 +15,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                            accessibilityDescription: "MacRing")
         statusItem.menu = buildMenu()
 
-        holdMonitor.onTriggerDown = { RingPanelController.shared.show(sticky: false) }
-        holdMonitor.onTriggerUp = { RingPanelController.shared.activateHoveredOrHide() }
+        // A wheel already on screen (sticky via hotkey/menu, or pinned by a
+        // click) is left alone: the hold combo must not reset its state.
+        holdMonitor.onTriggerDown = {
+            guard !RingPanelController.shared.isVisible else { return }
+            RingPanelController.shared.show(sticky: false)
+        }
+        holdMonitor.onTriggerUp = {
+            guard !RingPanelController.shared.isSticky else { return }
+            RingPanelController.shared.activateHoveredOrHide()
+        }
         HotkeyCenter.shared.onHotkey = { RingPanelController.shared.toggle(sticky: true) }
 
         applyConfig()
@@ -69,6 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
+        menu.autoenablesItems = false
         menu.addItem(withTitle: "Open Ring", action: #selector(openRing), keyEquivalent: "")
             .target = self
         menu.addItem(.separator())

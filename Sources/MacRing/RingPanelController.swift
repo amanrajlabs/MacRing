@@ -101,18 +101,23 @@ final class RingPanelController {
     }
 
     private func handleClick() {
-        if let child = model.hoveredChild {
-            hide()
-            ActionRunner.run(child)
-            return
-        }
-        // Clicking a category wedge pins the wheel open; empty space closes it.
         let mouse = NSEvent.mouseLocation
         let frame = panel.frame
         let cursor = CGPoint(x: mouse.x - frame.minX, y: frame.maxY - mouse.y)
-        if WheelGeometry.region(of: cursor, in: model.layout) == .innerBand {
+        switch WheelGeometry.region(of: cursor, in: model.layout) {
+        case .outerBand:
+            // A click only launches when it lands on a child wedge; anywhere
+            // outside the wheel just closes it.
+            if let child = model.hoveredChild {
+                hide()
+                ActionRunner.run(child)
+                return
+            }
             isSticky = true
-        } else {
+        case .innerBand:
+            // Clicking a category wedge pins the wheel open.
+            isSticky = true
+        default:
             hide()
         }
     }
