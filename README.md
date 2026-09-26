@@ -28,7 +28,7 @@ macOS 14+ · Apple Silicon & Intel · no account, no analytics, no network.
 
 ## Install
 
-Download the latest `MacRing-x.y.zip` from
+Download the latest `MacRing-x.y.z.zip` from
 [Releases](../../releases), unzip it, and drag **MacRing.app** to
 `/Applications`.
 
@@ -109,7 +109,7 @@ Command Line Tools are enough — no Xcode required:
 ```sh
 ./scripts/bundle.sh              # debug build   → dist/MacRing.app
 ./scripts/bundle.sh universal    # arm64+x86_64  → dist/MacRing.app
-./scripts/release.sh             # universal zip → dist/MacRing-x.y.zip
+./scripts/release.sh             # universal zip → dist/MacRing-x.y.z.zip
 swift run MacRingChecks          # run the checks
 ```
 
