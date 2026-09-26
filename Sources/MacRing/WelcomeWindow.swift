@@ -3,7 +3,7 @@ import MacRingKit
 import SwiftUI
 
 /// Shown exactly once, on first launch: teaches the two triggers and where
-/// Settings lives. Re-test with: defaults delete com.aman.MacRing didShowWelcome
+/// Settings lives. Re-test with: defaults delete io.github.amanrajlabs.macring didShowWelcome
 @MainActor
 final class WelcomeWindowController: NSWindowController, NSWindowDelegate {
     private static var retained: WelcomeWindowController?

@@ -9,7 +9,7 @@
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.aman.MacRing</string>
+	<string>io.github.amanrajlabs.macring</string>
 	<key>CFBundleName</key>
 	<string>MacRing</string>
 	<key>CFBundlePackageType</key>
